@@ -34,15 +34,19 @@ public class DataSender {
         private StreamObserver<Nvr.StreamFrame> streamObserver;
         private ArrayList<byte[]> framesBuffer = new ArrayList<>();
 
+        private StateListener mStateListener;
+
         private Thread thread;
 
-        public DataSenderGRPC init(String host, int port) {
+        public DataSenderGRPC init(String host, int port, StateListener stateListener) {
             channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build();
             NvrServiceGrpc.NvrServiceStub stub = NvrServiceGrpc.newStub(channel);
             streamObserver = stub.pushCameraStream(dummyStreamObserver);
 
             mHost = host;
             mPort = port;
+            mStateListener = stateListener;
+
             isReady = true;
             Log.v(TAG, "Crated GRPC sender => " + mHost + ":" + mPort);
 
@@ -54,11 +58,15 @@ public class DataSender {
 
         public void release() {
             isReady = false;
+            Log.v(TAG, "Release GRPC sender");
         }
 
         private Runnable runnableSender = new Runnable() {
             @Override
             public void run() {
+                if (mStateListener != null)
+                    mStateListener.onState(isReady);
+
                 while (isReady) {
                     while (framesBuffer.size() <= 0 && isReady) {
                         try {
@@ -83,6 +91,17 @@ public class DataSender {
                         }
                     }
                 }
+
+
+                if (channel != null) {
+                    streamObserver.onCompleted();
+                    channel.shutdownNow();
+                    channel = null;
+                }
+
+                if (mStateListener != null)
+                    mStateListener.onState(isReady);
+                Log.v(TAG, "Close GRPC sender");
             }
         };
 
@@ -113,6 +132,10 @@ public class DataSender {
                 isReady = false;
             }
         };
+
+        public interface StateListener {
+            void onState(boolean isRun);
+        }
     }
 
     public static class DataSenderUDP {
