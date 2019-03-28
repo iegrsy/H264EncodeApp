@@ -59,7 +59,9 @@ public class CameraPreviewFragment extends Fragment implements SurfaceHolder.Cal
         this.context = context;
     }
 
+    private boolean isGRPC = true;
     private DataSender.DataSenderUDP dataSenderUDP;
+    private DataSender.DataSenderGRPC dataSenderGRPC;
 
     @Override
     public void onPreviewFrame(byte[] data, Camera camera) {
@@ -67,10 +69,24 @@ public class CameraPreviewFragment extends Fragment implements SurfaceHolder.Cal
         // TODO: Implement this: [data ==> Frame format YV12]
         if (encoder != null) {
             byte[] encData = encoder.offerEncoder(data);
-            if (dataSenderUDP == null)
-                dataSenderUDP = new DataSender.DataSenderUDP("10.5.20.41", 7777);
-            dataSenderUDP.sendDataUDP(encData);
+            if (!isGRPC) {
+                if (dataSenderUDP == null)
+                    dataSenderUDP = new DataSender.DataSenderUDP("10.5.20.41", 7777);
+                dataSenderUDP.sendDataUDP(encData);
+            } else {
+                if (dataSenderGRPC == null) {
+                    dataSenderGRPC = new DataSender.DataSenderGRPC().init("10.5.178.83", 7777);
+                }
+                dataSenderGRPC.send(encData);
+            }
         }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (dataSenderGRPC != null)
+            dataSenderGRPC.release();
     }
 
     @Override
